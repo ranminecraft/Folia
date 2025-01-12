@@ -28,12 +28,6 @@ jobs:
         run: git config --global user.email "actions@github.com" && git config --global user.name "Github Actions"
       - name: Apply Patches
         run: ./gradlew applyAllPatches
-      - name: Rebuild Paper
-        run: ./gradlew rebuildPaperPatches
-      - name: Rebuild Server
-        run: ./gradlew rebuildServerPatches
-      - name: Rebuild Minecraft
-        run: ./gradlew rebuildMinecraftPatches
       - name: Build
         run: ./gradlew createMojmapBundlerJar
       - name: Upload artifact
