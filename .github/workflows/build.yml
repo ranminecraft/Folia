@@ -29,7 +29,7 @@ jobs:
       - name: Apply Patches
         run: ./gradlew applyAllPatches --stacktrace
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew createReobfBundlerJar
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
