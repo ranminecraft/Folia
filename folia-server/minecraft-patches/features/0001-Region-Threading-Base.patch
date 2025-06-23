@@ -15176,7 +15176,7 @@ index 7546ff4c5ffc62d93a3f874519db8fef1e3bfbcb..1f466eb418b7e7559a3047dda83f9e39
      /**
       * Invoked only when the entity is truly removed from the server, never to be added to any world.
 diff --git a/net/minecraft/world/entity/EntityReference.java b/net/minecraft/world/entity/EntityReference.java
-index ff660a5756c76abdac5536df80caced7a00c83c6..c741ae1b49ae801daf6567f77fa1348251f3e775 100644
+index ff660a5756c76abdac5536df80caced7a00c83c6..6c48bf2742199184cd94d08f1d5367b0ea9dda56 100644
 --- a/net/minecraft/world/entity/EntityReference.java
 +++ b/net/minecraft/world/entity/EntityReference.java
 @@ -15,22 +15,22 @@ import net.minecraft.world.level.entity.UniquelyIdentifyable;
@@ -15221,7 +15221,7 @@ index ff660a5756c76abdac5536df80caced7a00c83c6..c741ae1b49ae801daf6567f77fa13482
 +        Optional<org.bukkit.craftbukkit.entity.CraftEntity> optional = this.entity.right(); // Folia - region threading - force usage of CraftEntity
          if (optional.isPresent()) {
 -            StoredEntityType uniquelyIdentifyable = optional.get();
-+            StoredEntityType uniquelyIdentifyable = (StoredEntityType)optional.get().getHandle(); // Folia - region threading - force usage of CraftEntity
++            StoredEntityType uniquelyIdentifyable = (StoredEntityType)optional.get().getHandleRaw(); // Folia - region threading - force usage of CraftEntity
              if (!uniquelyIdentifyable.isRemoved()) {
                  return uniquelyIdentifyable;
              }
