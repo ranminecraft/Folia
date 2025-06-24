@@ -371,7 +371,7 @@ index f3f466ee58a2d90dcdbdf2b44f77bfb012ddd293..2c88740df6b9f20464fb89dccc169a96
          COMMANDS.forEach((s, command) -> {
              server.server.getCommandMap().register(s, "Paper", command);
 diff --git a/src/main/java/io/papermc/paper/command/subcommands/EntityCommand.java b/src/main/java/io/papermc/paper/command/subcommands/EntityCommand.java
-index bbd29bcca94a81ad2603afa9ddcb160e925b405e..6284384299000480e9d5c0b62e8d88b2c922e776 100644
+index e3ddc201b3285d5ffdad2e912cc4f75b7a64cd11..2b144ac1a6ec266ce9a2f6c4b17aa1174c2e78a4 100644
 --- a/src/main/java/io/papermc/paper/command/subcommands/EntityCommand.java
 +++ b/src/main/java/io/papermc/paper/command/subcommands/EntityCommand.java
 @@ -129,7 +129,7 @@ public final class EntityCommand implements PaperSubcommand {
@@ -738,15 +738,15 @@ index 9edf79dffd2836b40d41da4437c18d6145853f89..335058589eeba934105bea31a0c3aea2
  }
 -
 diff --git a/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java b/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
-index c03608fec96b51e1867f43d8f42e5aefb1520e46..127d96280cad2d4e5db574a089d67ad68977b34e 100644
+index 12a135ff0a339273fc6fe9fc632ec49bc82f39f3..48ca6582a7b1bc30bbff3337ff6360ac8e73cfe7 100644
 --- a/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
 +++ b/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java
-@@ -50,6 +50,14 @@ public final class EntityScheduler {
-         this.entity = Validate.notNull(entity);
+@@ -100,6 +100,14 @@ public final class EntityScheduler {
+         return this.tickCount == RETIRED_TICK_COUNT;
      }
  
 +    // Folia start - region threading
-+    public boolean isRetired() {
++    public boolean isRetiredOffThread() {
 +        synchronized (this.stateLock) {
 +            return this.tickCount == RETIRED_TICK_COUNT;
 +        }
@@ -2238,7 +2238,7 @@ index 000c5ea5d39d5ab6e5592012ab1cc7ee547505dc..ab2ee478c53923be85f5a6d4971bed5b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
-index a41f481a1ee5bbca7dbb3fce29f55fbf7028ec77..5723c9eb0b8c6f5f5e854de3a9839bbf9e2438eb 100644
+index a41f481a1ee5bbca7dbb3fce29f55fbf7028ec77..25822acaaf0a53aaa381f5e690272da284eb4e3c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java
 @@ -101,6 +101,11 @@ public abstract class CraftEntity implements org.bukkit.entity.Entity {
@@ -2247,7 +2247,7 @@ index a41f481a1ee5bbca7dbb3fce29f55fbf7028ec77..5723c9eb0b8c6f5f5e854de3a9839bbf
      // Paper end - Folia schedulers
 +    // Folia start - region threading
 +    public boolean isPurged() {
-+        return this.taskScheduler.isRetired();
++        return this.taskScheduler.isRetiredOffThread();
 +    }
 +    // Folia end - region threading
  
