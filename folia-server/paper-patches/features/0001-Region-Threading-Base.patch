@@ -769,10 +769,10 @@ index 8492a06883e2ff597bbbdaa74fe5e5cdd0a0a1b1..ff6d200c3c3ecb958086f11dff39357d
                  MinecraftServer.LOGGER.warn("Asynchronous " + reason + "!", new IllegalStateException());
              }
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c061c14f00 100644
+index 03dfcb4665d0279c825a74f3f999c92fe2bd22cb..f2def48c58e49870ca88f9cba20a92fdba6537f0 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -318,7 +318,7 @@ public final class CraftServer implements Server {
+@@ -317,7 +317,7 @@ public final class CraftServer implements Server {
      private final ServerConfiguration serverConfig = new PaperServerConfiguration();
  
      // Paper start - Folia region threading API
@@ -781,7 +781,7 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
      private final io.papermc.paper.threadedregions.scheduler.FoliaAsyncScheduler asyncScheduler = new io.papermc.paper.threadedregions.scheduler.FoliaAsyncScheduler();
      private final io.papermc.paper.threadedregions.scheduler.FoliaGlobalRegionScheduler globalRegionScheduler = new io.papermc.paper.threadedregions.scheduler.FoliaGlobalRegionScheduler();
  
-@@ -395,7 +395,7 @@ public final class CraftServer implements Server {
+@@ -394,7 +394,7 @@ public final class CraftServer implements Server {
  
      @Override
      public final boolean isGlobalTickThread() {
@@ -790,18 +790,8 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
      }
      // Paper end - Folia reagion threading API
  
-@@ -976,6 +976,9 @@ public final class CraftServer implements Server {
- 
-     // NOTE: Should only be called from DedicatedServer.ah()
-     public boolean dispatchServerCommand(CommandSender sender, ConsoleInput serverCommand) {
-+        // Folia start - region threading
-+        io.papermc.paper.threadedregions.RegionizedServer.ensureGlobalTickThread("May not dispatch server commands async");
-+        // Folia end - region threading
-         if (sender instanceof Conversable) {
-             Conversable conversable = (Conversable) sender;
- 
-@@ -995,12 +998,46 @@ public final class CraftServer implements Server {
-         }
+@@ -972,6 +972,27 @@ public final class CraftServer implements Server {
+         return this.playerList;
      }
  
 +    // Folia start - region threading
@@ -826,28 +816,28 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
 +    // Folia end - region threading
 +
      @Override
-     public boolean dispatchCommand(CommandSender sender, String commandLine) {
-         Preconditions.checkArgument(sender != null, "sender cannot be null");
-         Preconditions.checkArgument(commandLine != null, "commandLine cannot be null");
+     public boolean dispatchCommand(CommandSender rawSender, String commandLine) {
+         Preconditions.checkArgument(rawSender != null, "sender cannot be null");
+@@ -979,6 +1000,18 @@ public final class CraftServer implements Server {
          org.spigotmc.AsyncCatcher.catchOp("Command Dispatched Async: " + commandLine); // Spigot // Paper - Include command in error message
+         CommandSourceStack sourceStack = VanillaCommandWrapper.getListener(rawSender);
  
 +        // Folia start - region threading
-+        if ((sender instanceof Entity entity)) {
++        if ((rawSender instanceof Entity entity)) {
 +            ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(((org.bukkit.craftbukkit.entity.CraftEntity)entity).getHandle(), "Dispatching command async");
-+        } else if (sender instanceof ConsoleCommandSender || sender instanceof net.minecraft.server.rcon.RconConsoleSource
-+                    || sender instanceof org.bukkit.craftbukkit.command.CraftRemoteConsoleCommandSender
-+                    || sender instanceof io.papermc.paper.commands.FeedbackForwardingSender) {
++        } else if (rawSender instanceof ConsoleCommandSender || rawSender instanceof net.minecraft.server.rcon.RconConsoleSource
++                    || rawSender instanceof org.bukkit.craftbukkit.command.CraftRemoteConsoleCommandSender
++                    || rawSender instanceof io.papermc.paper.commands.FeedbackForwardingSender) {
 +            io.papermc.paper.threadedregions.RegionizedServer.ensureGlobalTickThread("Dispatching command async");
 +        } else {
 +            // huh?
-+            throw new UnsupportedOperationException("Dispatching command for " + sender);
++            throw new UnsupportedOperationException("Dispatching command for " + rawSender);
 +        }
 +        // Folia end - region threading
-+
-         if (this.commandMap.dispatch(sender, commandLine)) {
-             return true;
-         }
-@@ -1254,6 +1291,7 @@ public final class CraftServer implements Server {
+         net.minecraft.commands.Commands commands = this.getHandle().getServer().getCommands();
+         com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher = commands.getDispatcher();
+         com.mojang.brigadier.ParseResults<CommandSourceStack> results = dispatcher.parse(commandLine, sourceStack);
+@@ -1226,6 +1259,7 @@ public final class CraftServer implements Server {
  
      @Override
      public World createWorld(WorldCreator creator) {
@@ -855,7 +845,7 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
          Preconditions.checkState(this.console.getAllLevels().iterator().hasNext(), "Cannot create additional worlds on STARTUP");
          //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot create a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
          Preconditions.checkArgument(creator != null, "WorldCreator cannot be null");
-@@ -1451,6 +1489,7 @@ public final class CraftServer implements Server {
+@@ -1423,6 +1457,7 @@ public final class CraftServer implements Server {
  
      @Override
      public boolean unloadWorld(World world, boolean save) {
@@ -863,7 +853,7 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
          //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot unload a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
          if (world == null) {
              return false;
-@@ -2946,7 +2985,23 @@ public final class CraftServer implements Server {
+@@ -2918,7 +2953,23 @@ public final class CraftServer implements Server {
  
      @Override
      public double getAverageTickTime() {
@@ -888,7 +878,7 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
      }
  
      private final org.bukkit.Server.Spigot spigot = new org.bukkit.Server.Spigot() {
-@@ -3003,11 +3058,27 @@ public final class CraftServer implements Server {
+@@ -2975,11 +3026,27 @@ public final class CraftServer implements Server {
  
      @Override
      public double[] getTPS() {
@@ -919,7 +909,7 @@ index c1f1b757ca9a26e8d1d55a7cb7364ff530eaea36..1060a044c4d68e9a2b59b9575e3cb2c0
      }
  
      @Override
-@@ -3177,7 +3248,7 @@ public final class CraftServer implements Server {
+@@ -3149,7 +3216,7 @@ public final class CraftServer implements Server {
  
      @Override
      public int getCurrentTick() {
