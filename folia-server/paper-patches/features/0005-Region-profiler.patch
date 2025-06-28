@@ -77,11 +77,11 @@ relative to the parent, exactly similar to the D field of Timers,
 where Y is the total number of times the counter is invoked.
 
 diff --git a/src/main/java/io/papermc/paper/command/PaperCommands.java b/src/main/java/io/papermc/paper/command/PaperCommands.java
-index 11b6c7a4aa254d520c92b65fbbfa0c2fe4daae6f..b2c00b05ffa44b949e89c3aff7854df1b302045c 100644
+index b2da36202e59dfa23165528145d0fe08bb3966fb..4ccc2ce3743c260a86b27e951979eb8d5d5ae1db 100644
 --- a/src/main/java/io/papermc/paper/command/PaperCommands.java
 +++ b/src/main/java/io/papermc/paper/command/PaperCommands.java
-@@ -26,6 +26,7 @@ public final class PaperCommands {
-         COMMANDS.put("callback", new CallbackCommand("callback"));
+@@ -25,6 +25,7 @@ public final class PaperCommands {
+         COMMANDS.put("paper", new PaperCommand("paper"));
          COMMANDS.put("mspt", new MSPTCommand("mspt"));
          COMMANDS.put("tps", new io.papermc.paper.threadedregions.commands.CommandServerHealth()); // Folia - region threading
 +        COMMANDS.put("profiler", new io.papermc.paper.threadedregions.commands.CommandProfiler()); // Folia - region threading - profiler

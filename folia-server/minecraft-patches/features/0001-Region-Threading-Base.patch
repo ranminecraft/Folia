@@ -7652,7 +7652,7 @@ index 3acfb2a78845dd8081dc3c01d653034232c76e60..8c005a7b9480da7c124c5bd5bfccd5ca
      }
  
 diff --git a/net/minecraft/commands/Commands.java b/net/minecraft/commands/Commands.java
-index 656a7013b00dcd3c5555711af6068ac515465af8..68f2f2d8067d11fa4459c9fa21bc3fd4134b9157 100644
+index ec1cced129ef42be65d7b2b622638bfae8bd895e..ad19e9e599b26dfdb53929d9410860cb1b97698c 100644
 --- a/net/minecraft/commands/Commands.java
 +++ b/net/minecraft/commands/Commands.java
 @@ -185,15 +185,15 @@ public class Commands {
@@ -7757,7 +7757,7 @@ index 656a7013b00dcd3c5555711af6068ac515465af8..68f2f2d8067d11fa4459c9fa21bc3fd4
              SaveOffCommand.register(this.dispatcher);
              SaveOnCommand.register(this.dispatcher);
              SetPlayerIdleTimeoutCommand.register(this.dispatcher);
-@@ -494,9 +494,12 @@ public class Commands {
+@@ -496,9 +496,12 @@ public class Commands {
          }
          // Paper start - Perf: Async command map building
          new com.destroystokyo.paper.event.brigadier.AsyncPlayerSendCommandsEvent<CommandSourceStack>(player.getBukkitEntity(), (RootCommandNode) rootCommandNode, false).callEvent(); // Paper - Brigadier API
@@ -12033,7 +12033,7 @@ index dda8d38ef61672cc714d9e5a475f9b0412ed5ff9..cd6f937fa4eaba6033bfc230e3483b6b
      // Paper end - lag compensation
  }
 diff --git a/net/minecraft/server/level/ServerPlayer.java b/net/minecraft/server/level/ServerPlayer.java
-index f3eca351021c37b64315872d075bd0a84aeee267..5ce18ef709bdc8d42c32a9de8a6869e79eca7f99 100644
+index 728fa1210e0fd837e28c48802045dea2ae59f5d6..0aa668073bcb0569c8d1cb3f03dbfaaef765e6ca 100644
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
 @@ -195,7 +195,7 @@ import org.slf4j.Logger;
@@ -12948,7 +12948,7 @@ index bd07e6a5aa1883786d789ea71711a0c0c0a95c26..09469ad131622158fe5579216fc41642
              }
              // Spigot end
 diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index dfceafdf4e9116caeb784335186ddbb4e22ecb64..4bab02bb85b4be5bf539b498de040fd1d4fc671a 100644
+index 625eae18ab13ae27949128f6325b3608a557cf1f..501cd1a8ed8fe67072812cac0ebbb3dfd698dd72 100644
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -287,10 +287,10 @@ public class ServerGamePacketListenerImpl
@@ -14071,7 +14071,7 @@ index a3c7d68469075bf8d33f2016149a181b0fb87e0e..73c581d3ee21d8fa96eae3e47afd6ce2
              return blockToFallLocation(blockState);
          } else {
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index 81413ac0de7b3c7a72bc606fe5ae6fb4ae7055e3..737ae61a40385d6231576e3cec405b1bdfbd08a9 100644
+index 3d2c0a4d3a1f9d3e5cc6cd0cdb988ae1205de821..5c3e5107feb1b15333e143d70c726759f44e874c 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
 @@ -156,7 +156,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
@@ -15100,17 +15100,17 @@ index 81413ac0de7b3c7a72bc606fe5ae6fb4ae7055e3..737ae61a40385d6231576e3cec405b1b
      }
  
      public float rotate(Rotation transformRotation) {
-@@ -4988,7 +5817,8 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
-             }
+@@ -4978,7 +5807,8 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+             return;
          }
-         // Paper end - Fix MC-4
+         // Paper end - Block invalid positions and bounding box
 -        if (this.position.x != x || this.position.y != y || this.position.z != z) {
 +        boolean posChanged = this.position.x != x || this.position.y != y || this.position.z != z;
 +        if (posChanged) { // Folia - region threading
              synchronized (this.posLock) { // Paper - detailed watchdog information
              this.position = new Vec3(x, y, z);
              } // Paper - detailed watchdog information
-@@ -5021,7 +5851,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -5011,7 +5841,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
          }
          // Paper start - Block invalid positions and bounding box; don't allow desync of pos and AABB
          // hanging has its own special logic
@@ -15119,7 +15119,7 @@ index 81413ac0de7b3c7a72bc606fe5ae6fb4ae7055e3..737ae61a40385d6231576e3cec405b1b
              this.setBoundingBox(this.makeBoundingBox());
          }
          // Paper end - Block invalid positions and bounding box
-@@ -5128,6 +5958,12 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -5118,6 +5948,12 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
          return this.removalReason != null;
      }
  
@@ -15132,7 +15132,7 @@ index 81413ac0de7b3c7a72bc606fe5ae6fb4ae7055e3..737ae61a40385d6231576e3cec405b1b
      @Nullable
      public Entity.RemovalReason getRemovalReason() {
          return this.removalReason;
-@@ -5143,6 +5979,9 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -5133,6 +5969,9 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
          // Paper end - rewrite chunk system
          org.bukkit.craftbukkit.event.CraftEventFactory.callEntityRemoveEvent(this, cause); // CraftBukkit
          final boolean alreadyRemoved = this.removalReason != null; // Paper - Folia schedulers
@@ -15142,7 +15142,7 @@ index 81413ac0de7b3c7a72bc606fe5ae6fb4ae7055e3..737ae61a40385d6231576e3cec405b1b
          if (this.removalReason == null) {
              this.removalReason = removalReason;
          }
-@@ -5166,6 +6005,10 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -5156,6 +5995,10 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
          this.removalReason = null;
      }
  
@@ -15153,7 +15153,7 @@ index 81413ac0de7b3c7a72bc606fe5ae6fb4ae7055e3..737ae61a40385d6231576e3cec405b1b
      // Paper start - Folia schedulers
      /**
       * Invoked only when the entity is truly removed from the server, never to be added to any world.
-@@ -5177,7 +6020,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
+@@ -5167,7 +6010,7 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
      // Paper end - Folia schedulers
      // Paper start - optimise Folia entity scheduler
      public final void registerScheduler() {
@@ -15931,10 +15931,10 @@ index 595dee03e3a7d98d703e48fb53d82d7f392a2b3d..34e31fa13e5107f13e166f694fafe58e
                  BlockPos blockPos = this.blockPosition();
                  boolean flag = this.blockState.getBlock() instanceof ConcretePowderBlock;
 diff --git a/net/minecraft/world/entity/item/ItemEntity.java b/net/minecraft/world/entity/item/ItemEntity.java
-index a29860af4c37b2b45df49f9ba18f7e38921dfb02..a596813c3cbacb1a4be86d41be01e8850fc6799c 100644
+index 51804b611f469f2ab53e455e8c633b867b00cc88..2309d1a30459ff986ab5bc4316247efaa7472a41 100644
 --- a/net/minecraft/world/entity/item/ItemEntity.java
 +++ b/net/minecraft/world/entity/item/ItemEntity.java
-@@ -495,13 +495,21 @@ public class ItemEntity extends Entity implements TraceableEntity {
+@@ -503,13 +503,21 @@ public class ItemEntity extends Entity implements TraceableEntity {
          return false;
      }
  
