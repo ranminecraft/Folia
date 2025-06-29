@@ -1458,7 +1458,7 @@ index 4a7de2ed6eabe919f0c33de49ed7fab75abac1b4..7280ca2250ade4166a1a883b205bbc89
                          if (var4 instanceof ReportedException reportedException && reportedException.getCause() instanceof OutOfMemoryError) {
                              throw makeReportedException(var4, packet, processor);
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 779d18a6cbdfcf9487288a60d4039bf5c3ca2fc4..29101af861b6b8c577d08c940cea17c843d00081 100644
+index 7c46bb3f4e2fe496d300b7b7df2293a8cff06c38..8e69876debfdbab3965fb93fe79d1125f4f21636 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
 @@ -1580,6 +1580,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -1492,7 +1492,7 @@ index 779d18a6cbdfcf9487288a60d4039bf5c3ca2fc4..29101af861b6b8c577d08c940cea17c8
 +            foliaProfiler.startTimer(ca.spottedleaf.leafprofiler.LProfilerRegistry.ENTITY_SCHEDULER_TICK); try { // Folia - profiler
              for (io.papermc.paper.threadedregions.EntityScheduler scheduler : region.world.getCurrentWorldData().entitySchedulerTickList.getAllSchedulers()) {
                  net.minecraft.world.entity.Entity handle = scheduler.entity.getHandleRaw();
-                 if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(handle) || handle.isRemoved()) {
+                 if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(handle) || scheduler.isRetired()) {
                      continue;
                  }
  

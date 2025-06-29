@@ -8207,7 +8207,7 @@ index 4535858701b2bb232b9d2feb2af6551526232ddc..4a7de2ed6eabe919f0c33de49ed7fab7
          }
      }
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 52fa5112cd90ba766c94512a02401dd3aee82cc9..779d18a6cbdfcf9487288a60d4039bf5c3ca2fc4 100644
+index 52fa5112cd90ba766c94512a02401dd3aee82cc9..7c46bb3f4e2fe496d300b7b7df2293a8cff06c38 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
 @@ -184,7 +184,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -8651,7 +8651,7 @@ index 52fa5112cd90ba766c94512a02401dd3aee82cc9..779d18a6cbdfcf9487288a60d4039bf5
 +            // now run all the entity schedulers
 +            for (io.papermc.paper.threadedregions.EntityScheduler scheduler : region.world.getCurrentWorldData().entitySchedulerTickList.getAllSchedulers()) {
 +                net.minecraft.world.entity.Entity handle = scheduler.entity.getHandleRaw();
-+                if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(handle) || handle.isRemoved()) {
++                if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(handle) || scheduler.isRetired()) {
 +                    continue;
 +                }
 +
