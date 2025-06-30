@@ -7839,7 +7839,7 @@ index 340d5487fa778277b9560250271c5143d80d9987..fa4c69f13ba73b463c45195487c13ea2
          if (!this.haveTestsStarted()) {
              this.startTests(serverLevel);
 diff --git a/net/minecraft/network/Connection.java b/net/minecraft/network/Connection.java
-index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a974cc179a 100644
+index 8bab2c26e10e8495fd39be470bcb02917fe56f40..2d18e9c153eabf266cfcc097613f33deb9ddb248 100644
 --- a/net/minecraft/network/Connection.java
 +++ b/net/minecraft/network/Connection.java
 @@ -85,7 +85,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
@@ -7871,7 +7871,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
 +        return this.becomeActive;
 +    }
 +
-+    private static record DisconnectReq(DisconnectionDetails disconnectReason, org.bukkit.event.player.PlayerKickEvent.Cause cause) {}
++    private static record DisconnectReq(DisconnectionDetails details) {}
 +
 +    private final ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<DisconnectReq> disconnectReqs =
 +            new ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue<>();
@@ -7880,8 +7880,8 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
 +     * Safely disconnects the connection while possibly on another thread. Note: This call will not block, even if on the
 +     * same thread that could disconnect.
 +     */
-+    public final void disconnectSafely(DisconnectionDetails disconnectReason, org.bukkit.event.player.PlayerKickEvent.Cause cause) {
-+        this.disconnectReqs.add(new DisconnectReq(disconnectReason, cause));
++    public final void disconnectSafely(DisconnectionDetails details) {
++        this.disconnectReqs.add(new DisconnectReq(details));
 +        // We can't halt packet processing here because a plugin could cancel a kick request.
 +    }
 +
@@ -7889,8 +7889,8 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
 +     * Safely disconnects the connection while possibly on another thread. Note: This call will not block, even if on the
 +     * same thread that could disconnect.
 +     */
-+    public final void disconnectSafely(Component disconnectReason, org.bukkit.event.player.PlayerKickEvent.Cause cause) {
-+        this.disconnectReqs.add(new DisconnectReq(new DisconnectionDetails(disconnectReason), cause));
++    public final void disconnectSafely(Component disconnectReason, io.papermc.paper.connection.DisconnectionReason cause) {
++        this.disconnectReqs.add(new DisconnectReq(new DisconnectionDetails(disconnectReason, java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.ofNullable(cause))));
 +        // We can't halt packet processing here because a plugin could cancel a kick request.
 +    }
 +
@@ -8042,7 +8042,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
      }
      // Paper end - Optimize network
  
-@@ -581,17 +627,37 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -581,17 +627,36 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      private static int currTick; // Paper - Buffer joins to world
      public void tick() {
          this.flushQueue();
@@ -8058,16 +8058,15 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
 +            PacketListener packetlistener = this.packetListener;
 +
 +            if (packetlistener instanceof net.minecraft.server.network.ServerLoginPacketListenerImpl loginPacketListener) {
-+                loginPacketListener.disconnect(disconnectReq.disconnectReason.reason());
++                loginPacketListener.disconnect(disconnectReq.details.reason());
 +                // this doesn't fail, so abort any further attempts
 +                return;
 +            } else if (packetlistener instanceof net.minecraft.server.network.ServerCommonPacketListenerImpl commonPacketListener) {
-+                commonPacketListener.disconnect(disconnectReq.disconnectReason, disconnectReq.cause);
++                commonPacketListener.disconnect(disconnectReq.details);
 +                // may be cancelled by a plugin, if not cancelled then any further calls do nothing
 +                continue;
 +            } else {
-+                // no idea what packet to send
-+                this.disconnect(disconnectReq.disconnectReason);
++                this.disconnect(disconnectReq.details);
 +                this.setReadOnly();
 +                return;
 +            }
@@ -8088,7 +8087,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
              // Paper start - detailed watchdog information
              net.minecraft.network.protocol.PacketUtils.packetProcessing.push(this.packetListener);
              try {
-@@ -602,7 +668,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -602,7 +667,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
              } // Paper end - Buffer joins to world
          }
  
@@ -8097,7 +8096,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
              this.handleDisconnection();
          }
  
-@@ -653,6 +719,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -653,6 +718,7 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
              this.channel.close(); // We can't wait as this may be called from an event loop.
              this.disconnectionDetails = disconnectionDetails;
          }
@@ -8105,7 +8104,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
      }
  
      public boolean isMemoryConnection() {
-@@ -844,10 +911,10 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -844,10 +910,10 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
  
      public void handleDisconnection() {
          if (this.channel != null && !this.channel.isOpen()) {
@@ -8118,7 +8117,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
                  PacketListener packetListener = this.getPacketListener();
                  PacketListener packetListener1 = packetListener != null ? packetListener : this.disconnectListener;
                  if (packetListener1 != null) {
-@@ -876,6 +943,21 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -876,6 +942,21 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
                      }
                  }
                  // Paper end - Add PlayerConnectionCloseEvent
@@ -8140,7 +8139,7 @@ index 8bab2c26e10e8495fd39be470bcb02917fe56f40..c6ced2e61933c548c410cea3ae7122a9
              }
          }
      }
-@@ -895,15 +977,25 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
+@@ -895,15 +976,25 @@ public class Connection extends SimpleChannelInboundHandler<Packet<?>> {
      // Paper start - Optimize network
      public void clearPacketQueue() {
          final net.minecraft.server.level.ServerPlayer player = getPlayer();
@@ -12753,10 +12752,10 @@ index 11fed81a4696ba18440e755c3b8a5ca39ed8a6b1..45d6a95196a791d366791e02d23c53b8
  
      public boolean isOldChunkAround(ChunkPos pos, int radius) {
 diff --git a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-index 16962ccab91d0941e428a2e53aa37e9ca975f62f..0e3a58609cc909f6e51080ea4823c1e30d8b26b7 100644
+index 16962ccab91d0941e428a2e53aa37e9ca975f62f..28c4a7bcb73946d37ed57c6f76d27ba019554c98 100644
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-@@ -75,12 +75,24 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -75,12 +75,29 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          }
      }
  
@@ -12777,11 +12776,16 @@ index 16962ccab91d0941e428a2e53aa37e9ca975f62f..0e3a58609cc909f6e51080ea4823c1e3
              LOGGER.info("Stopping singleplayer server as player logged out");
              this.server.halt(false);
          }
-+        this.player.getBukkitEntity().taskScheduler.retire(); // Folia - region threading
++        // Folia start - region threading
++        if (!(this instanceof ServerGamePacketListenerImpl gamePacketListener)) {
++            throw new UnsupportedOperationException("Configuration mode is not supported in its current state");
++        }
++        gamePacketListener.player.getBukkitEntity().taskScheduler.retire();
++        // Folia end - region threading
      }
  
      @Override
-@@ -266,24 +278,8 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -266,24 +283,13 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          if (this.processedDisconnect) {
              return;
          }
@@ -12803,12 +12807,17 @@ index 16962ccab91d0941e428a2e53aa37e9ca975f62f..0e3a58609cc909f6e51080ea4823c1e3
 -            } catch (java.util.concurrent.ExecutionException e) {
 -                throw new RuntimeException(e);
 -            }
-+        if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this.player)) { // Folia - region threading
-+            this.connection.disconnectSafely(disconnectionDetails, cause); // Folia - region threading - it HAS to be delayed/async to avoid deadlock if we try to wait for another region
++        // Folia start - region threading
++        if (!(this instanceof ServerGamePacketListenerImpl gamePacketListener)) {
++            throw new UnsupportedOperationException("Configuration mode is not supported in its current state");
++        }
++        // Folia end - region threading
++        if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(gamePacketListener.player)) { // Folia - region threading
++            this.connection.disconnectSafely(disconnectionDetails); // Folia - region threading - it HAS to be delayed/async to avoid deadlock if we try to wait for another region
              return;
          }
  
-@@ -337,7 +333,7 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -337,7 +343,7 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          this.onDisconnect(disconnectionDetails);
          this.connection.setReadOnly();
          // CraftBukkit - Don't wait
@@ -12818,7 +12827,7 @@ index 16962ccab91d0941e428a2e53aa37e9ca975f62f..0e3a58609cc909f6e51080ea4823c1e3
  
      // Paper start - add proper async disconnect
 diff --git a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
-index 91ca446e6e1d895d818fc7f844375101be6af5e8..b62861a305bea8b1e68c93caafdda275e3b5ba8f 100644
+index 91ca446e6e1d895d818fc7f844375101be6af5e8..5ce26b50399dceb17883b3fb403d821d7b71dd4c 100644
 --- a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 @@ -48,6 +48,7 @@ public class ServerConfigurationPacketListenerImpl extends ServerCommonPacketLis
@@ -12829,6 +12838,15 @@ index 91ca446e6e1d895d818fc7f844375101be6af5e8..b62861a305bea8b1e68c93caafdda275
  
      public ServerConfigurationPacketListenerImpl(MinecraftServer server, Connection connection, CommonListenerCookie cookie) {
          super(server, connection, cookie);
+@@ -153,7 +154,7 @@ public class ServerConfigurationPacketListenerImpl extends ServerCommonPacketLis
+                 return;
+             }
+ 
+-            Component component = org.bukkit.craftbukkit.event.CraftEventFactory.handleLoginResult(playerList.canPlayerLogin(this.connection.getRemoteAddress(), this.gameProfile), this.paperConnection, this.connection, this.gameProfile, this.server, false); // Paper - Login event logic
++            Component component = org.bukkit.craftbukkit.event.CraftEventFactory.handleLoginResult(playerList.canPlayerLogin(this.connection.getRemoteAddress(), this.gameProfile, this.connection), this.paperConnection, this.connection, this.gameProfile, this.server, false); // Paper - Login event logic // Folia - region threading - add connection parameter
+             if (component != null) {
+                 this.disconnect(component);
+                 return;
 @@ -169,7 +170,60 @@ public class ServerConfigurationPacketListenerImpl extends ServerCommonPacketLis
                  serverPlayer = new ServerPlayer(this.server, this.server.overworld(), this.gameProfile, this.clientInformation);
              }
@@ -13313,7 +13331,7 @@ index 04c991964364a9bcf87d9f6a8d3ef0a0dd8f1deb..9467c162ca460fc51781d49e1aad470b
  
      // Paper start
 diff --git a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-index ebf4d4516233c002b33084f1679044b23869d848..8998637bcf1eaeaefa2d6e46a883f761d389a5d0 100644
+index ebf4d4516233c002b33084f1679044b23869d848..8f07aedb2233f8e43554bec77f9940a398b97941 100644
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 @@ -92,7 +92,13 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
@@ -13330,6 +13348,15 @@ index ebf4d4516233c002b33084f1679044b23869d848..8998637bcf1eaeaefa2d6e46a883f761
          }
  
          if (this.state == ServerLoginPacketListenerImpl.State.WAITING_FOR_DUPE_DISCONNECT
+@@ -204,7 +210,7 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
+ 
+     private void verifyLoginAndFinishConnectionSetup(GameProfile profile) {
+         PlayerList playerList = this.server.getPlayerList();
+-        Component component = org.bukkit.craftbukkit.event.CraftEventFactory.handleLoginResult(playerList.canPlayerLogin(this.connection.getRemoteAddress(), profile), this.paperLoginConnection, this.connection, profile, this.server, true); // Paper
++        Component component = org.bukkit.craftbukkit.event.CraftEventFactory.handleLoginResult(playerList.canPlayerLogin(this.connection.getRemoteAddress(), profile, this.connection), this.paperLoginConnection, this.connection, profile, this.server, true); // Paper // Folia - region threading - add connection parameter
+         if (component != null) {
+             this.disconnect(component);
+         } else {
 @@ -216,7 +222,7 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
                      );
              }
@@ -13414,7 +13441,7 @@ index 194082763f41a58dc8ee0241a2eeb6dd39dff88d..484d3a17d22a2237e6102fde56890df9
              date = defaultValue;
          }
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index dea72819f2933e5a806bb3a0603e4ebdf7f99456..b37ef4ccedfed4bb13f9cda50b1fc5ff7f371664 100644
+index dea72819f2933e5a806bb3a0603e4ebdf7f99456..fd8531f26ab14cfc5dc28128862684fba98f0910 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
 @@ -109,10 +109,10 @@ public abstract class PlayerList {
@@ -13457,10 +13484,10 @@ index dea72819f2933e5a806bb3a0603e4ebdf7f99456..b37ef4ccedfed4bb13f9cda50b1fc5ff
 +
 +        if (conflictingId != null || conflictingName != null) {
 +            if (conflictingName != null && conflictingName.isPlayerConnected()) {
-+                conflictingName.disconnectSafely(message, org.bukkit.event.player.PlayerKickEvent.Cause.DUPLICATE_LOGIN);
++                conflictingName.disconnectSafely(message, io.papermc.paper.connection.DisconnectionReason.DUPLICATE_LOGIN_MESSAGE);
 +            }
 +            if (conflictingName != conflictingId && conflictingId != null && conflictingId.isPlayerConnected()) {
-+                conflictingId.disconnectSafely(message, org.bukkit.event.player.PlayerKickEvent.Cause.DUPLICATE_LOGIN);
++                conflictingId.disconnectSafely(message, io.papermc.paper.connection.DisconnectionReason.DUPLICATE_LOGIN_MESSAGE);
 +            }
 +        }
 +
@@ -13638,6 +13665,15 @@ index dea72819f2933e5a806bb3a0603e4ebdf7f99456..b37ef4ccedfed4bb13f9cda50b1fc5ff
  
              if (otherPlayer.getBukkitEntity().canSee(player.getBukkitEntity())) {
                  otherPlayer.connection.send(packet);
+@@ -615,7 +688,7 @@ public abstract class PlayerList {
+         }
+     }
+     // Paper end - PlayerLoginEvent
+-    public LoginResult canPlayerLogin(SocketAddress socketAddress, GameProfile gameProfile) { // Paper - PlayerLoginEvent
++    public LoginResult canPlayerLogin(SocketAddress socketAddress, GameProfile gameProfile, Connection connection) { // Paper - PlayerLoginEvent // Folia - region threading - add connection parameter
+         LoginResult whitelistEventResult; // Paper
+         // Paper start - Fix MC-158900
+         UserBanListEntry userBanListEntry;
 @@ -624,7 +697,7 @@ public abstract class PlayerList {
              MutableComponent mutableComponent = Component.translatable("multiplayer.disconnect.banned.reason", userBanListEntry.getReason());
              if (userBanListEntry.getExpires() != null) {
@@ -13647,7 +13683,7 @@ index dea72819f2933e5a806bb3a0603e4ebdf7f99456..b37ef4ccedfed4bb13f9cda50b1fc5ff
                  );
              }
  
-@@ -638,7 +711,7 @@ public abstract class PlayerList {
+@@ -638,13 +711,13 @@ public abstract class PlayerList {
              MutableComponent mutableComponent = Component.translatable("multiplayer.disconnect.banned_ip.reason", ipBanListEntry.getReason());
              if (ipBanListEntry.getExpires() != null) {
                  mutableComponent.append(
@@ -13655,6 +13691,13 @@ index dea72819f2933e5a806bb3a0603e4ebdf7f99456..b37ef4ccedfed4bb13f9cda50b1fc5ff
 +                    Component.translatable("multiplayer.disconnect.banned_ip.expiration", BAN_DATE_FORMAT.get().format(ipBanListEntry.getExpires())) // Folia - region threading - SDF is not thread-safe
                  );
              }
+ 
+             return new LoginResult(mutableComponent, org.bukkit.event.player.PlayerLoginEvent.Result.KICK_BANNED); // Paper - PlayerLoginEvent
+         } else {
+-            return this.canBypassFullServerLogin(gameProfile, new LoginResult(Component.translatable("multiplayer.disconnect.server_full"), org.bukkit.event.player.PlayerLoginEvent.Result.KICK_FULL)); // Paper - PlayerServerFullCheckEvent
++            return this.canBypassFullServerLogin(gameProfile, new LoginResult(Component.translatable("multiplayer.disconnect.server_full"), org.bukkit.event.player.PlayerLoginEvent.Result.KICK_FULL), connection); // Paper - PlayerServerFullCheckEvent // Folia - region threading - add connection parameter
+         }
+     }
  
 @@ -658,14 +731,7 @@ public abstract class PlayerList {
              }
@@ -13755,12 +13798,14 @@ index dea72819f2933e5a806bb3a0603e4ebdf7f99456..b37ef4ccedfed4bb13f9cda50b1fc5ff
          }
      }
  
-@@ -991,7 +1066,7 @@ public abstract class PlayerList {
+@@ -990,8 +1065,8 @@ public abstract class PlayerList {
+     }
  
      // Paper start - whitelist verify event / login event
-     public LoginResult canBypassFullServerLogin(final GameProfile profile, final LoginResult currentResult) {
+-    public LoginResult canBypassFullServerLogin(final GameProfile profile, final LoginResult currentResult) {
 -        final boolean shouldKick = this.players.size() >= this.maxPlayers && !this.canBypassPlayerLimit(profile);
-+        final boolean shouldKick = !this.countConnection(loginlistener.connection, this.maxPlayers) && !this.canBypassPlayerLimit(profile); // Folia - region threading - we control connection state here now async, not player list size
++    public LoginResult canBypassFullServerLogin(final GameProfile profile, final LoginResult currentResult, final Connection connection) { // Folia - region threading - add connection parameter
++        final boolean shouldKick = !this.countConnection(connection, this.maxPlayers) && !this.canBypassPlayerLimit(profile); // Folia - region threading - we control connection state here now async, not player list size
          final io.papermc.paper.event.player.PlayerServerFullCheckEvent fullCheckEvent = new io.papermc.paper.event.player.PlayerServerFullCheckEvent(
              com.destroystokyo.paper.profile.CraftPlayerProfile.asBukkitMirror(profile),
              io.papermc.paper.adventure.PaperAdventure.asAdventure(currentResult.message),
