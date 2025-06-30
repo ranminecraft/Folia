@@ -6,20 +6,20 @@ Subject: [PATCH] Max pending logins
 Should help the floodgates on launch
 
 diff --git a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-index 983b2e68aa9db72d0fca42016272b9203bfb7a17..829ff1f36d565f15cfe5d4997d3ccfdfe7898e0f 100644
+index 8998637bcf1eaeaefa2d6e46a883f761d389a5d0..d6c18d79dc9c0e7ac67a9346008243ace03f71e8 100644
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-@@ -116,7 +116,7 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
+@@ -98,7 +98,7 @@ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener,
              if (this.server.getPlayerList().pushPendingJoin(name, uniqueId, this.connection)) {
              // Folia end - region threading - rewrite login process
              this.verifyLoginAndFinishConnectionSetup(Objects.requireNonNull(this.authenticatedProfile));
--            } // Paper - prevent logins to be processed even though disconnect was called
-+            } else { --this.tick; } // Paper - prevent logins to be processed even though disconnect was called // Folia - max concurrent logins
+-            } // Folia - region threading - rewrite login process
++            } else { --this.tick; } // Folia - region threading - rewrite login process // Folia - max concurrent logins
          }
  
-         // CraftBukkit start
+         if (this.state == ServerLoginPacketListenerImpl.State.WAITING_FOR_DUPE_DISCONNECT
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index 2b48b6bbbc503e2c5c0362a0255a3741d84a22cd..250d805f52e527e48119726851373d74435b74cd 100644
+index b37ef4ccedfed4bb13f9cda50b1fc5ff7f371664..0de42ad1eefb2258a2520f899f9e62625eab1939 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
 @@ -150,6 +150,17 @@ public abstract class PlayerList {

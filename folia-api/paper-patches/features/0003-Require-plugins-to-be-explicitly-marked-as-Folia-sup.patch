@@ -14,10 +14,10 @@ more helpful than some random error log caused by
 a breakage.
 
 diff --git a/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java b/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java
-index 3c768d5ccf490e962d9638e92d4ea7c85670bad8..2dbc9fc268850c85e4e8d38da05586a004862c76 100644
+index 2114651bd68c5eddc6e2ab7304d48643ee4b8916..158edf843d389e279b0bfc0a80c78e1482e1d50f 100644
 --- a/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java
 +++ b/src/main/java/io/papermc/paper/plugin/configuration/PluginMeta.java
-@@ -183,4 +183,12 @@ public interface PluginMeta {
+@@ -180,4 +180,12 @@ public interface PluginMeta {
       */
      @Nullable String getAPIVersion();
  

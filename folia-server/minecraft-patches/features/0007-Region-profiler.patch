@@ -1860,10 +1860,10 @@ index cd6f937fa4eaba6033bfc230e3483b6b9e1ae607..5e3be75b27ed609be005e8169dc84c12
      }
  
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index 89227a0136cfdcaf56a2e109903d1ebc6e1eb597..dd68471549096b86ea82f2add3d3886fb054e78b 100644
+index 0de42ad1eefb2258a2520f899f9e62625eab1939..4408d7af06c0759ee2dbad4cf295e03487446074 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
-@@ -1165,6 +1165,7 @@ public abstract class PlayerList {
+@@ -1151,6 +1151,7 @@ public abstract class PlayerList {
  
      public void saveAll(final int interval) {
          io.papermc.paper.util.MCUtil.ensureMain("Save Players" , () -> { // Paper - Ensure main
@@ -1871,7 +1871,7 @@ index 89227a0136cfdcaf56a2e109903d1ebc6e1eb597..dd68471549096b86ea82f2add3d3886f
          int numSaved = 0;
          final long now = System.nanoTime(); // Folia - region threading
          long timeInterval = (long)interval * io.papermc.paper.threadedregions.TickRegionScheduler.TIME_BETWEEN_TICKS; // Folia - region threading
-@@ -1175,7 +1176,9 @@ public abstract class PlayerList {
+@@ -1161,7 +1162,9 @@ public abstract class PlayerList {
              }
              // Folia end - region threading
              if (interval == -1 || now - player.lastSave >= timeInterval) { // Folia - region threading
