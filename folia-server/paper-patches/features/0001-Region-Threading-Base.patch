@@ -362,7 +362,7 @@ index 28a3817d4605f8f9dba2b8d7725ae1df6ad1ec93..76a3f9e38d9912068c78a2b61844347e
                      callback.callback.accept(audience);
                  }
 diff --git a/src/main/java/io/papermc/paper/command/PaperCommands.java b/src/main/java/io/papermc/paper/command/PaperCommands.java
-index eeefb915d48c15ee8b20eca61fd2846a4e869f07..b2da36202e59dfa23165528145d0fe08bb3966fb 100644
+index 6dfd0b1a85d518828b15158c01472ae4383b8882..cf9996228b320dd466de706928aa75df6df4340f 100644
 --- a/src/main/java/io/papermc/paper/command/PaperCommands.java
 +++ b/src/main/java/io/papermc/paper/command/PaperCommands.java
 @@ -24,6 +24,7 @@ public final class PaperCommands {
@@ -3092,10 +3092,10 @@ index d927938df4ac2b5de7ef2d26a3f0056b8310ddcd..2778d675b436642667780758c2e09d60
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a4708817e606d8 100644
+index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfac753d50c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-@@ -249,7 +249,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -236,7 +236,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public ServerPlayer getHandle() {
@@ -3104,7 +3104,7 @@ index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a47088
      }
  
      @Override
-@@ -648,7 +648,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -635,7 +635,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void kickPlayer(String message) {
@@ -3113,7 +3113,7 @@ index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a47088
          this.getHandle().connection.disconnect(CraftChatMessage.fromStringOrEmpty(message, true), org.bukkit.event.player.PlayerKickEvent.Cause.PLUGIN); // Paper - kick event cause
      }
  
-@@ -661,7 +661,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -648,7 +648,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void kick(net.kyori.adventure.text.Component message, org.bukkit.event.player.PlayerKickEvent.Cause cause) {
@@ -3122,7 +3122,7 @@ index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a47088
          final ServerGamePacketListenerImpl connection = this.getHandle().connection;
          if (connection != null) {
              connection.disconnect(message == null ? net.kyori.adventure.text.Component.empty() : message, cause);
-@@ -1369,6 +1369,11 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -1356,6 +1356,11 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public boolean teleport(Location location, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause, io.papermc.paper.entity.TeleportFlag... flags) {
@@ -3134,7 +3134,7 @@ index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a47088
          Set<io.papermc.paper.entity.TeleportFlag.Relative> relativeArguments;
          Set<io.papermc.paper.entity.TeleportFlag> allFlags;
          if (flags.length == 0) {
-@@ -2036,7 +2041,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -2023,7 +2028,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
      private void unregisterEntity(Entity other) {
          // Paper end
          ChunkMap tracker = ((ServerLevel) this.getHandle().level()).getChunkSource().chunkMap;
@@ -3143,7 +3143,7 @@ index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a47088
          if (entry != null) {
              entry.removePlayer(this.getHandle());
          }
-@@ -2133,7 +2138,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -2120,7 +2125,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
              if (original != null) otherPlayer.setUUID(original); // Paper - uuid override
          }
  
@@ -3152,7 +3152,7 @@ index 3ea6d207b2189fa6bebe101bfc98093c2c6b19c7..049895f2eeefef19daff487f21a47088
          if (entry != null && !entry.seenBy.contains(this.getHandle().connection)) {
              entry.updatePlayer(this.getHandle());
          }
-@@ -3270,7 +3275,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player {
+@@ -3249,7 +3254,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
          @Override
          public void respawn() {
              if (CraftPlayer.this.getHealth() <= 0 && CraftPlayer.this.isOnline()) {

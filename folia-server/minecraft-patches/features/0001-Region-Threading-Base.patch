@@ -12752,10 +12752,10 @@ index 11fed81a4696ba18440e755c3b8a5ca39ed8a6b1..45d6a95196a791d366791e02d23c53b8
  
      public boolean isOldChunkAround(ChunkPos pos, int radius) {
 diff --git a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-index 16962ccab91d0941e428a2e53aa37e9ca975f62f..28c4a7bcb73946d37ed57c6f76d27ba019554c98 100644
+index 2e7c4c74818befd25e296b58ef9f20319544c2fb..31101f5af05772a0842b56ecc2dd8c79eebee933 100644
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-@@ -75,12 +75,29 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -79,12 +79,29 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          }
      }
  
@@ -12785,7 +12785,7 @@ index 16962ccab91d0941e428a2e53aa37e9ca975f62f..28c4a7bcb73946d37ed57c6f76d27ba0
      }
  
      @Override
-@@ -266,24 +283,13 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -338,24 +355,13 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          if (this.processedDisconnect) {
              return;
          }
@@ -12817,7 +12817,7 @@ index 16962ccab91d0941e428a2e53aa37e9ca975f62f..28c4a7bcb73946d37ed57c6f76d27ba0
              return;
          }
  
-@@ -337,7 +343,7 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -409,7 +415,7 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          this.onDisconnect(disconnectionDetails);
          this.connection.setReadOnly();
          // CraftBukkit - Don't wait
@@ -12827,7 +12827,7 @@ index 16962ccab91d0941e428a2e53aa37e9ca975f62f..28c4a7bcb73946d37ed57c6f76d27ba0
  
      // Paper start - add proper async disconnect
 diff --git a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
-index 91ca446e6e1d895d818fc7f844375101be6af5e8..5ce26b50399dceb17883b3fb403d821d7b71dd4c 100644
+index 676c863e50286082273aaafd4a5c1b2d9028b6f8..6c80febdd6370587abb67bc9f1852bc98bc911f4 100644
 --- a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 @@ -48,6 +48,7 @@ public class ServerConfigurationPacketListenerImpl extends ServerCommonPacketLis
@@ -12940,7 +12940,7 @@ index bd07e6a5aa1883786d789ea71711a0c0c0a95c26..09469ad131622158fe5579216fc41642
              }
              // Spigot end
 diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 04c991964364a9bcf87d9f6a8d3ef0a0dd8f1deb..9467c162ca460fc51781d49e1aad470b142949a9 100644
+index 3bb431da22aaf4ed1965aa9bc89732b25b1e3648..95bb18d625c1cfeb494dba6b0bb0669ec19dcd57 100644
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -287,10 +287,10 @@ public class ServerGamePacketListenerImpl
@@ -13176,7 +13176,7 @@ index 04c991964364a9bcf87d9f6a8d3ef0a0dd8f1deb..9467c162ca460fc51781d49e1aad470b
 @@ -2166,7 +2206,7 @@ public class ServerGamePacketListenerImpl
          LOGGER.info("{} lost connection: {}", this.player.getName().getString(), details.reason().getString());
          // Paper start - Fix kick event leave message not being sent
-         final net.kyori.adventure.text.Component quitMessage = io.papermc.paper.adventure.PaperAdventure.asAdventure(details.quitMessage().orElse(null));
+         final net.kyori.adventure.text.Component quitMessage = details.quitMessage().map(io.papermc.paper.adventure.PaperAdventure::asAdventure).orElse(null);
 -        this.removePlayerFromWorld(quitMessage);
 +        if (!this.waitingForSwitchToConfig) this.removePlayerFromWorld(quitMessage); // Folia - region threading
          // Paper end - Fix kick event leave message not being sent
@@ -13309,7 +13309,7 @@ index 04c991964364a9bcf87d9f6a8d3ef0a0dd8f1deb..9467c162ca460fc51781d49e1aad470b
                      this.player.setChatSession(chatSession);
                      this.server
                          .getPlayerList()
-@@ -3694,19 +3780,7 @@ public class ServerGamePacketListenerImpl
+@@ -3699,19 +3785,7 @@ public class ServerGamePacketListenerImpl
  
      @Override
      public void disconnectAsync(final net.minecraft.network.DisconnectionDetails disconnectionInfo) {
@@ -13329,7 +13329,7 @@ index 04c991964364a9bcf87d9f6a8d3ef0a0dd8f1deb..9467c162ca460fc51781d49e1aad470b
 +        this.disconnect(disconnectionInfo); // Folia - threaded regions
      }
  
-     // Paper start
+     public final boolean isDisconnected() {
 diff --git a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 index ebf4d4516233c002b33084f1679044b23869d848..8f07aedb2233f8e43554bec77f9940a398b97941 100644
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
@@ -15670,7 +15670,7 @@ index 86fccf3617a32f3791b03d8067e2eaf6b8d8bebb..89a78ba2e96cf3d6c8cec850a6197d4a
          if (chunkNow == null) {
              return null;
 diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
-index 3b29cc4e11efe6f27023f52cfde16fd118c310ad..0072020113efefa3a050f166f63675524575e17e 100644
+index dd1a95111d965bcd7f53be9d4224dd213e4e0705..599902da838f977e47b3b51a5de65503594b0ef6 100644
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 @@ -96,11 +96,11 @@ public abstract class PathNavigation {
