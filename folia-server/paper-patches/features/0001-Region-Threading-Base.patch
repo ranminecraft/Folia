@@ -5,7 +5,7 @@ Subject: [PATCH] Region Threading Base
 
 
 diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
-index 69cdd304d255d52c9b7dc9b6a33ffdb630b79abe..c95769a4e64fabd7acdff6c5f6f349107e1cf5c0 100644
+index 69cdd304d255d52c9b7dc9b6a33ffdb630b79abe..e417c9a140778954572fb8bc190fad64feacffe0 100644
 --- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 +++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 @@ -1,5 +1,11 @@
@@ -175,7 +175,7 @@ index 69cdd304d255d52c9b7dc9b6a33ffdb630b79abe..c95769a4e64fabd7acdff6c5f6f34910
 +                        return gamePacketListener.waitingForSwitchToConfig;
 +                    }
 +                    if (packetListener instanceof net.minecraft.server.network.ServerConfigurationPacketListenerImpl configurationPacketListener) {
-+                        return !configurationPacketListener.switchToMain;
++                        return configurationPacketListener.switchToMain == null;
 +                    }
 +                    return true;
 +                } else {
@@ -300,26 +300,26 @@ index f6266b3ca9c031ef9e96df23e0413c7db5211bd8..388bad4fb53bb4046e7f616557e93333
                  @Override
                  protected Void evaluate() {
 diff --git a/src/main/java/io/papermc/paper/adventure/providers/ClickCallbackProviderImpl.java b/src/main/java/io/papermc/paper/adventure/providers/ClickCallbackProviderImpl.java
-index 28a3817d4605f8f9dba2b8d7725ae1df6ad1ec93..76a3f9e38d9912068c78a2b61844347e2cd3a7cb 100644
+index e62cfa5f47f52830e37b6ba3108b73d8b18e4c6a..5d6d8b9c9290cadf5ba4db587e240c7cb50a16c5 100644
 --- a/src/main/java/io/papermc/paper/adventure/providers/ClickCallbackProviderImpl.java
 +++ b/src/main/java/io/papermc/paper/adventure/providers/ClickCallbackProviderImpl.java
-@@ -32,29 +32,26 @@ public class ClickCallbackProviderImpl implements ClickCallback.Provider {
+@@ -86,8 +86,8 @@ public class ClickCallbackProviderImpl implements ClickCallback.Provider {
+     abstract static class CallbackManager<C, I> {
  
-     public static final class CallbackManager {
- 
--        private final Map<UUID, StoredCallback> callbacks = new HashMap<>();
--        private final Queue<StoredCallback> queue = new ConcurrentLinkedQueue<>();
-+        private final java.util.concurrent.ConcurrentHashMap<UUID, StoredCallback> callbacks = new java.util.concurrent.ConcurrentHashMap<>(); // Folia - region threading
+         private final Predicate<ResourceLocation> locationPredicate;
+-        protected final Map<I, StoredCallback<C, I>> callbacks = new HashMap<>();
+-        private final Queue<StoredCallback<C, I>> queue = new ConcurrentLinkedQueue<>();
++        protected final Map<I, StoredCallback<C, I>> callbacks = new java.util.concurrent.ConcurrentHashMap<>(); // Folia - region threading
 +        // Folia - region threading
  
-         private CallbackManager() {
+         protected CallbackManager(final Predicate<ResourceLocation> locationPredicate) {
+             this.locationPredicate = locationPredicate;
+@@ -98,27 +98,33 @@ public class ClickCallbackProviderImpl implements ClickCallback.Provider {
          }
  
-         public UUID addCallback(final @NotNull ClickCallback<Audience> callback, final ClickCallback.@NotNull Options options) {
-             final UUID id = UUID.randomUUID();
--            this.queue.add(new StoredCallback(callback, options, id));
-+            final StoredCallback scb = new StoredCallback(callback, options, id); // Folia - region threading
-+            this.callbacks.put(scb.id(), scb); // Folia - region threading
+         public I addCallback(final I id, final @NotNull C callback, final ClickCallback.@NotNull Options options) {
+-            this.queue.add(new StoredCallback<>(callback, options, id));
++            this.callbacks.put(id, new StoredCallback<>(callback, options, id)); // Folia - region threading
              return id;
          }
  
@@ -331,36 +331,33 @@ index 28a3817d4605f8f9dba2b8d7725ae1df6ad1ec93..76a3f9e38d9912068c78a2b61844347e
              }
  
 -            // Add entries from queue
--            StoredCallback callback;
+-            StoredCallback<C, I> callback;
 -            while ((callback = this.queue.poll()) != null) {
 -                this.callbacks.put(callback.id(), callback);
 -            }
 +            // Folia - region threading
          }
  
-         public void tryRunCallback(final @NotNull Audience audience, final Tag tag) {
-@@ -66,8 +63,19 @@ public class ClickCallbackProviderImpl implements ClickCallback.Provider {
-                     return;
-                 }
- 
--                final StoredCallback callback = this.callbacks.get(id);
--                if (callback != null && callback.valid()) {
-+                // Folia start - region threading
-+                final StoredCallback[] use = new StoredCallback[1];
-+                this.callbacks.computeIfPresent(id, (final UUID keyInMap, final StoredCallback value) -> {
-+                    if (!value.valid()) {
-+                        return null;
-+                    }
-+                    use[0] = value;
-+                    value.takeUse();
-+                    return value.valid() ? value : null;
-+                });
-+                final StoredCallback callback = use[0];
-+                if (callback != null) {
-+                    // Folia end - region threading
-                     callback.takeUse();
-                     callback.callback.accept(audience);
-                 }
+         final void tryConsumeCallback(final I key, final Consumer<? super C> callbackConsumer) {
+-            final StoredCallback<C, I> callback = this.callbacks.get(key);
+-            if (callback != null && callback.valid()) {
+-                callback.takeUse();
++            // Folia start - region threading
++            final StoredCallback<C, I>[] use = new StoredCallback[1];
++            this.callbacks.computeIfPresent(key, (final I keyInMap, final StoredCallback<C, I> value) -> {
++                if (!value.valid()) {
++                    return null;
++                }
++                use[0] = value;
++                value.takeUse();
++                return value.valid() ? value : null;
++            });
++            final StoredCallback<C, I> callback = use[0];
++            if (callback != null) {
++                // Folia end - region threading
+                 callbackConsumer.accept(callback.callback);
+             }
+         }
 diff --git a/src/main/java/io/papermc/paper/command/PaperCommands.java b/src/main/java/io/papermc/paper/command/PaperCommands.java
 index 6dfd0b1a85d518828b15158c01472ae4383b8882..cf9996228b320dd466de706928aa75df6df4340f 100644
 --- a/src/main/java/io/papermc/paper/command/PaperCommands.java
@@ -1970,7 +1967,7 @@ index 93d7fde68469cb015e22779b83ded336be849dde..6325ea46e0f7707ab607157a9a8fbbb2
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftCat.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftCat.java
-index 7b518e142343c8b91e4ee119f75e36c2e8d65f21..d2e5f3f1a8b791fd24dce181c60c4171abde35e6 100644
+index c3e28e291e7c761f75302d39a1fbcebaa40ea305..1658d1a205d0fc31f4616a5b52e5dfcac35ac40b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftCat.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftCat.java
 @@ -18,6 +18,7 @@ public class CraftCat extends CraftTameableAnimal implements Cat {
@@ -2018,7 +2015,7 @@ index d05897695fc3cb06fa1bfffff3a0142f651caf34..d572fe3855dd05523e1f8cdb619c1388
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftChicken.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftChicken.java
-index ec6e42a6172f679b588ee8dd5b651cce470a48f2..44969d28ca742ea57496c0f9ae4c75e6a697e1ef 100644
+index 5b1353d87a119f23d332a94fe4afded908dfdeb9..e5f55a5e48ea720884f84508ffe6e287c64e5c10 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftChicken.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftChicken.java
 @@ -19,6 +19,7 @@ public class CraftChicken extends CraftAnimals implements Chicken {
@@ -2054,7 +2051,7 @@ index 178cadf023bf516b93625c124fbf1a06b0131c58..bf9a8efbaf7b77edac1dc1280de713b0
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftCow.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftCow.java
-index d21aa1b8b1b5b6b2183a576893cf8ddb36203e28..2863d46ccf67fa127cb97c33c5af578900624e4b 100644
+index c93885fdd01e1c288dfcbf71b455c6519aa210d1..54e71e64897e3b8287f0ac7fe710c057d74851e0 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftCow.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftCow.java
 @@ -19,6 +19,7 @@ public class CraftCow extends CraftAbstractCow implements Cow {
@@ -2496,7 +2493,7 @@ index 8084bd6788658b485046910d711d399be25089e3..053c594c4fab97a3b6abc28525304902
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftFrog.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftFrog.java
-index 7d2e9495f830e8b5161c8da481293ece5da8efca..043c7385dd9cbbea008af6a86d57b200ec70170d 100644
+index 08df77201f0f3ca05dbae98c42471e526abd5a06..99bb073f3c2546fad1a9cac7ea205690e048178f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftFrog.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftFrog.java
 @@ -18,6 +18,7 @@ public class CraftFrog extends CraftAnimals implements org.bukkit.entity.Frog {
@@ -3020,7 +3017,7 @@ index cabdcbef0e6f7ca41ff5677bc2e6a81665ca812d..302f0fd3a8e2641ae312a9f5e5e3f3c7
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPig.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPig.java
-index 91f1e61e37ef8ab766cea8f9bb62f8e8e8d4a5f9..b163d8c779e8a561cf8606a0110c61ee0fcbaf69 100644
+index 387eed77223a6bc321d685bc87aed1365c724e3c..32b43d2f13a83b5a60f45099dbdc223f7418d060 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPig.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPig.java
 @@ -23,6 +23,7 @@ public class CraftPig extends CraftAnimals implements Pig {
@@ -3092,10 +3089,19 @@ index d927938df4ac2b5de7ef2d26a3f0056b8310ddcd..2778d675b436642667780758c2e09d60
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfac753d50c 100644
+index 9d6235390c530b4f3780ac8d088ad8f6ee3db58e..4cdbd0965f42f30979a24444625532a29b43f9c3 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java
-@@ -236,7 +236,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -237,7 +237,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+         @Override
+         public void respawn() {
+             if (CraftPlayer.this.getHealth() <= 0 && CraftPlayer.this.isOnline()) {
+-                CraftPlayer.this.server.getServer().getPlayerList().respawn(CraftPlayer.this.getHandle(), false, Entity.RemovalReason.KILLED, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.PLUGIN);
++                CraftPlayer.this.getHandle().respawn(null, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.PLUGIN); // Folia - region threading
+             }
+         }
+ 
+@@ -350,7 +350,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public ServerPlayer getHandle() {
@@ -3104,7 +3110,7 @@ index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfa
      }
  
      @Override
-@@ -635,7 +635,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -752,7 +752,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void kickPlayer(String message) {
@@ -3113,7 +3119,7 @@ index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfa
          this.getHandle().connection.disconnect(CraftChatMessage.fromStringOrEmpty(message, true), org.bukkit.event.player.PlayerKickEvent.Cause.PLUGIN); // Paper - kick event cause
      }
  
-@@ -648,7 +648,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -763,7 +763,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public void kick(net.kyori.adventure.text.Component message, org.bukkit.event.player.PlayerKickEvent.Cause cause) {
@@ -3122,7 +3128,7 @@ index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfa
          final ServerGamePacketListenerImpl connection = this.getHandle().connection;
          if (connection != null) {
              connection.disconnect(message == null ? net.kyori.adventure.text.Component.empty() : message, cause);
-@@ -1356,6 +1356,11 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -1463,6 +1463,11 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
  
      @Override
      public boolean teleport(Location location, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause cause, io.papermc.paper.entity.TeleportFlag... flags) {
@@ -3134,7 +3140,7 @@ index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfa
          Set<io.papermc.paper.entity.TeleportFlag.Relative> relativeArguments;
          Set<io.papermc.paper.entity.TeleportFlag> allFlags;
          if (flags.length == 0) {
-@@ -2023,7 +2028,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -2146,7 +2151,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
      private void unregisterEntity(Entity other) {
          // Paper end
          ChunkMap tracker = ((ServerLevel) this.getHandle().level()).getChunkSource().chunkMap;
@@ -3143,7 +3149,7 @@ index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfa
          if (entry != null) {
              entry.removePlayer(this.getHandle());
          }
-@@ -2120,7 +2125,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
+@@ -2245,7 +2250,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
              if (original != null) otherPlayer.setUUID(original); // Paper - uuid override
          }
  
@@ -3152,15 +3158,6 @@ index 1e2e8d81e6d05b9e94fdb40dcdc4a7e0e4ceb0ac..f3e5cb73ce2b32a807156cc0797c6bfa
          if (entry != null && !entry.seenBy.contains(this.getHandle().connection)) {
              entry.updatePlayer(this.getHandle());
          }
-@@ -3249,7 +3254,7 @@ public class CraftPlayer extends CraftHumanEntity implements Player, PluginMessa
-         @Override
-         public void respawn() {
-             if (CraftPlayer.this.getHealth() <= 0 && CraftPlayer.this.isOnline()) {
--                CraftPlayer.this.server.getServer().getPlayerList().respawn(CraftPlayer.this.getHandle(), false, Entity.RemovalReason.KILLED, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.PLUGIN);
-+                CraftPlayer.this.getHandle().respawn(null, org.bukkit.event.player.PlayerRespawnEvent.RespawnReason.PLUGIN); // Folia - region threading
-             }
-         }
- 
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftPolarBear.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftPolarBear.java
 index 1e3b8eb597f6e72f9ce286dcb8be589d3e0e6a8c..a4876bbfc1b934b86706a83600658a7f563b2036 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftPolarBear.java
@@ -3618,7 +3615,7 @@ index f561b45a20f0b9adac9deb671423f9ed57955789..37269f76b589f789b40b99ea79ddd6fe
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftVillager.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftVillager.java
-index 66f0089ee33c36b9d13fb0b87303d33f08021ed1..214caca8c9a44349687ac16a14fa3ccee2f1b4ad 100644
+index df332b6938b81822ba0436a7999ee448913e7c22..83575ea52471378f5363da19115873ba98317d40 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftVillager.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftVillager.java
 @@ -30,6 +30,7 @@ public class CraftVillager extends CraftAbstractVillager implements Villager {
@@ -3738,7 +3735,7 @@ index 027849368189d1f28b26fe87c717b7a775b58dcb..54ff8cd5acd6b25b09c2ad1d54e8d6fc
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java b/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
-index 33866c5a5591150de4c1d8f4c175122db3bd5bd4..4a9e680376c51ca78dd3d868e3709cbe65f92160 100644
+index 723a8e659485850632adf173e52669e6e4f3fcc0..8276da4dee7e9bdbd0ae50a519d81c33f9c174f0 100644
 --- a/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
 +++ b/src/main/java/org/bukkit/craftbukkit/entity/CraftWolf.java
 @@ -19,6 +19,7 @@ public class CraftWolf extends CraftTameableAnimal implements Wolf {
@@ -3774,7 +3771,7 @@ index 9851c3890c9377d9fd1813f82766c2841ae48fd4..034b210ca024dcb3d9f59f1cdeef8c16
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-index 1d112510093d5eb5117adf16b92dd3411a610a4a..7972155606951173c0e4a0c7b937959dacb54d5f 100644
+index 183d83f023644c9c5dba0702ba2464566e74ad32..e1aa4ce0cda19547ef396b89dc0c90c1018fee31 100644
 --- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 @@ -819,7 +819,7 @@ public class CraftEventFactory {
