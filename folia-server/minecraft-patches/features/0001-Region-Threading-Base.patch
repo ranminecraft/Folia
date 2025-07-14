@@ -1557,7 +1557,7 @@ index 0000000000000000000000000000000000000000..a1043c426d031755b57b77a9b2eec685
 \ No newline at end of file
 diff --git a/io/papermc/paper/threadedregions/RegionizedServer.java b/io/papermc/paper/threadedregions/RegionizedServer.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b362fe60c94d3ea05addd8f093046dfcc3164c45
+index 0000000000000000000000000000000000000000..e1842ab8f20271a8b20ab8462b09a4745a612a9a
 --- /dev/null
 +++ b/io/papermc/paper/threadedregions/RegionizedServer.java
 @@ -0,0 +1,469 @@
@@ -1915,7 +1915,7 @@ index 0000000000000000000000000000000000000000..b362fe60c94d3ea05addd8f093046dfc
 +        }
 +
 +        if (conn.getPacketListener() instanceof net.minecraft.server.network.ServerConfigurationPacketListenerImpl configurationPacketListener) {
-+            return configurationPacketListener.switchToMain;
++            return configurationPacketListener.switchToMain != null;
 +        }
 +
 +        return false;
@@ -12755,10 +12755,10 @@ index 11fed81a4696ba18440e755c3b8a5ca39ed8a6b1..45d6a95196a791d366791e02d23c53b8
  
      public boolean isOldChunkAround(ChunkPos pos, int radius) {
 diff --git a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-index 08c59d603fca038fc2dde36384eea1b6c971e659..2c71556899986a481b62c46dd2a2fa0f4c6df308 100644
+index 08c59d603fca038fc2dde36384eea1b6c971e659..714813cba67da4a737682fe9276cb0d96fea336d 100644
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-@@ -85,12 +85,29 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -85,8 +85,19 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          }
      }
  
@@ -12778,17 +12778,7 @@ index 08c59d603fca038fc2dde36384eea1b6c971e659..2c71556899986a481b62c46dd2a2fa0f
          if (this.isSingleplayerOwner()) {
              LOGGER.info("Stopping singleplayer server as player logged out");
              this.server.halt(false);
-         }
-+        // Folia start - region threading
-+        if (!(this instanceof ServerGamePacketListenerImpl gamePacketListener)) {
-+            throw new UnsupportedOperationException("Configuration mode is not supported in its current state");
-+        }
-+        gamePacketListener.player.getBukkitEntity().taskScheduler.retire();
-+        // Folia end - region threading
-     }
- 
-     @Override
-@@ -350,24 +367,13 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
+@@ -350,24 +361,19 @@ public abstract class ServerCommonPacketListenerImpl implements ServerCommonPack
          if (this.processedDisconnect) {
              return;
          }
@@ -12811,12 +12801,18 @@ index 08c59d603fca038fc2dde36384eea1b6c971e659..2c71556899986a481b62c46dd2a2fa0f
 -                throw new RuntimeException(e);
 -            }
 +        // Folia start - region threading
-+        if (!(this instanceof ServerGamePacketListenerImpl gamePacketListener)) {
-+            throw new UnsupportedOperationException("Configuration mode is not supported in its current state");
++        boolean onMain;
++        if (this instanceof ServerGamePacketListenerImpl serverGamePacketListener) {
++            onMain = ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(serverGamePacketListener.player);
++        } else if (this instanceof ServerConfigurationPacketListenerImpl configurationPacketListener) {
++            net.minecraft.server.level.ServerPlayer player = configurationPacketListener.switchToMain;
++            onMain = player == null ? io.papermc.paper.threadedregions.RegionizedServer.isGlobalTickThread() : ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(player);
++        } else {
++            onMain = io.papermc.paper.threadedregions.RegionizedServer.isGlobalTickThread();
 +        }
-+        // Folia end - region threading
-+        if (!ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(gamePacketListener.player)) { // Folia - region threading
-+            this.connection.disconnectSafely(disconnectionDetails); // Folia - region threading - it HAS to be delayed/async to avoid deadlock if we try to wait for another region
++        if (!onMain) {
++            this.connection.disconnectSafely(disconnectionDetails); // it HAS to be delayed/async to avoid deadlock if we try to wait for another region
++            // Folia end - region threading
              return;
          }
  
@@ -12830,14 +12826,14 @@ index 08c59d603fca038fc2dde36384eea1b6c971e659..2c71556899986a481b62c46dd2a2fa0f
  
      // Paper start - add proper async disconnect
 diff --git a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
-index ea892dd1d23d0f16c11381d1e8d75164a2791a3d..a3ccce0ed014c7a81fd68b1c11e4d2328325576a 100644
+index ea892dd1d23d0f16c11381d1e8d75164a2791a3d..2c1930ec25f0e0bc66f967f05515838cad6cf066 100644
 --- a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 @@ -48,6 +48,7 @@ public class ServerConfigurationPacketListenerImpl extends ServerCommonPacketLis
      @Nullable
      private SynchronizeRegistriesTask synchronizeRegistriesTask;
      public io.papermc.paper.connection.PaperPlayerConfigurationConnection paperConnection; // Paper
-+    public boolean switchToMain = false; // Folia - region threading - rewrite login process
++    public ServerPlayer switchToMain; // Folia - region threading - rewrite login process
  
      public ServerConfigurationPacketListenerImpl(MinecraftServer server, Connection connection, CommonListenerCookie cookie) {
          super(server, connection, cookie);
@@ -12898,14 +12894,14 @@ index ea892dd1d23d0f16c11381d1e8d75164a2791a3d..a3ccce0ed014c7a81fd68b1c11e4d232
 +                    ca.spottedleaf.concurrentutil.util.Priority.HIGHER
 +                );
 +            });
-+            this.switchToMain = true;
++            this.switchToMain = serverPlayer;
 +            try {
 +                // now the connection responsibility is transferred on the region
 +                playerList.loadSpawnForNewPlayer(this.connection, serverPlayer, clientData, scopedCollector, data, lastKnownName, toComplete);
 +            } catch (final Throwable throwable) {
 +                // assume toComplete will not be invoked
 +                // ensure global tick thread owns the connection again, to properly disconnect it
-+                this.switchToMain = false;
++                this.switchToMain = null;
 +                throw new RuntimeException(throwable);
 +            }
 +            // Folia end - region threading - rewrite login process
@@ -12943,7 +12939,7 @@ index bd07e6a5aa1883786d789ea71711a0c0c0a95c26..09469ad131622158fe5579216fc41642
              }
              // Spigot end
 diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-index 5bba860a5f913d3a83c1d469f0f4854b6e063a49..05fe39bda63d78b6c8fcfb9dbbab20e79e2a7f8e 100644
+index 5bba860a5f913d3a83c1d469f0f4854b6e063a49..736cefb8dd20b93995ee3acf8e8671e5c8fb4d8b 100644
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 @@ -287,10 +287,10 @@ public class ServerGamePacketListenerImpl
@@ -13181,7 +13177,7 @@ index 5bba860a5f913d3a83c1d469f0f4854b6e063a49..05fe39bda63d78b6c8fcfb9dbbab20e7
          // Paper start - Fix kick event leave message not being sent
          final net.kyori.adventure.text.Component quitMessage = details.quitMessage().map(io.papermc.paper.adventure.PaperAdventure::asAdventure).orElse(null);
 -        this.removePlayerFromWorld(quitMessage);
-+        if (!this.waitingForSwitchToConfig) this.removePlayerFromWorld(quitMessage); // Folia - region threading
++        if (!this.waitingForSwitchToConfig) this.removePlayerFromWorld(quitMessage); // Folia - region threading - don't double remove
          // Paper end - Fix kick event leave message not being sent
          super.onDisconnect(details);
      }
@@ -13236,7 +13232,7 @@ index 5bba860a5f913d3a83c1d469f0f4854b6e063a49..05fe39bda63d78b6c8fcfb9dbbab20e7
 +        // removed from the world
 +        // Folia end - rewrite login process - fix bad ordering of this field write - move after removed from world
 +        try { // Folia - rewrite login process - move connection ownership to global region
-+            this.hackSwitchingConfig = true; // Folia - rewrite login process - avoid adding logout ticket here and retiring scheduler
++            this.hackSwitchingConfig = true; // Folia - rewrite login process - avoid adding logout ticket here
          this.removePlayerFromWorld();
 +        } finally { // Folia start - rewrite login process - move connection ownership to global region
 +            io.papermc.paper.threadedregions.RegionizedWorldData worldData = this.player.level().getCurrentWorldData();
@@ -13444,7 +13440,7 @@ index 194082763f41a58dc8ee0241a2eeb6dd39dff88d..484d3a17d22a2237e6102fde56890df9
              date = defaultValue;
          }
 diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
-index dea72819f2933e5a806bb3a0603e4ebdf7f99456..fd8531f26ab14cfc5dc28128862684fba98f0910 100644
+index dea72819f2933e5a806bb3a0603e4ebdf7f99456..da0efd01e0cd59dee8856779a89962c12e1e7603 100644
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
 @@ -109,10 +109,10 @@ public abstract class PlayerList {
@@ -13649,15 +13645,6 @@ index dea72819f2933e5a806bb3a0603e4ebdf7f99456..fd8531f26ab14cfc5dc28128862684fb
              final net.minecraft.world.scores.Scoreboard scoreBoard = this.server.getLevel(Level.OVERWORLD).getScoreboard();
              final PlayerTeam team = scoreBoard.getPlayersTeam(this.collideRuleTeamName);
              if (player.getTeam() == team && team != null) {
-@@ -573,7 +647,7 @@ public abstract class PlayerList {
-         }
- 
-         serverLevel.removePlayerImmediately(player, Entity.RemovalReason.UNLOADED_WITH_PLAYER);
--        player.retireScheduler(); // Paper - Folia schedulers
-+        //player.retireScheduler(); // Paper - Folia schedulers // Folia - region threading - move to onDisconnect of common packet listener
-         player.getAdvancements().stopListening();
-         this.players.remove(player);
-         this.playersByName.remove(player.getScoreboardName().toLowerCase(java.util.Locale.ROOT)); // Spigot
 @@ -591,8 +665,7 @@ public abstract class PlayerList {
          // CraftBukkit start
          // this.broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
