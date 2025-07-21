@@ -10,6 +10,10 @@ jobs:
     # Only run on PRs if the source branch is on someone else's repo
     if: ${{ github.event_name != 'pull_request' || github.repository != github.event.pull_request.head.repo.full_name }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Checkout Git Repository
         uses: actions/checkout@v4
@@ -23,6 +27,10 @@ jobs:
       - name: Configure Git User Details
         run: git config --global user.email "actions@github.com" && git config --global user.name "Github Actions"
       - name: Apply Patches
-        run: ./gradlew applyAllPatches --stacktrace
+        run: ./gradlew applyAllPatches
       - name: Build
-        run: ./gradlew build
+        run: ./gradlew createMojmapBundlerJar
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: './folia-server/build/libs/*.jar'
